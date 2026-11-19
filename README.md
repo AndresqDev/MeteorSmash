@@ -86,12 +86,24 @@ Validated against Pumpkin nightly `0.2.2+26.3-26.63`:
 - animation and impact execute without a Wasm trap;
 - custom sound calls, particle calls, block writes and display creation return normally.
 
+## Visual design
+
+See [VISUAL.md](VISUAL.md) for the composition, public particle/sound identifiers and timing choices.
+
 ## Known notes
 
 - Block display support depends on the Pumpkin host version.
 - Custom sound playback depends on the client's resource/sound registry; unknown sounds are client-side no-ops.
 - The meteor intentionally changes the world. It does not restore the crater automatically.
 - True asynchronous gameplay is not available in the current synchronous WIT `0.1.0` toolchain; the animation uses server ticks.
+
+## Release
+
+Published at:
+
+```text
+https://github.com/AndresqDev/MeteorSmash/releases/tag/v0.1.0
+```
 
 ## License
 
