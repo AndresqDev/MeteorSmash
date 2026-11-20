@@ -20,15 +20,18 @@ import pumpkin.World;
  * Drives one meteor animation from a single repeating server-tick task.
  *
  * Block displays form the readable meteor body, a multi-particle trail carries
- * the motion, and the post-impact surface wave repaints the crater from a
- * center-out palette while keeping fire on real support blocks.
+ * the motion, and the post-impact surface pulse repaints the crater from the
+ * center outward without adding new fire.
  */
 public final class MeteorDirector {
     private static final int FALL_TICKS = 44;
     private static final int ALTITUDE = 27;
     private static final int CRATER_RADIUS = 14;
-    private static final int GRADIENT_DELAY = 8;
-    private static final int GRADIENT_TICKS = CRATER_RADIUS * 2;
+    private static final int GRADIENT_DELAY = 3;
+    private static final int SECONDARY_EXPLOSION_TICK = 24;
+    private static final double CORE_SCALE = 2.1;
+    private static final double SHELL_SCALE = 0.78;
+    private static final double SHELL_RADIUS = 1.52;
     private static final double TARGET_DISTANCE = 14.0;
     private static final double PI = 3.141592653589793;
     private static final double DEG_TO_RAD = 0.017453292519943295;
@@ -57,6 +60,8 @@ public final class MeteorDirector {
     private int generation;
     private int age;
     private int afterImpact;
+    private int gradientRadius;
+    private int nextPulseTick;
     private boolean impacted;
     private boolean secondaryExplosion;
 
@@ -81,6 +86,8 @@ public final class MeteorDirector {
         impact = new Position(targetX + 0.5, ground + 1.0, targetZ + 0.5);
         age = 0;
         afterImpact = 0;
+        gradientRadius = 0;
+        nextPulseTick = GRADIENT_DELAY;
         impacted = false;
         secondaryExplosion = false;
 
@@ -132,11 +139,11 @@ public final class MeteorDirector {
         } else {
             afterImpact++;
             updateImpactResidue();
-            if (!secondaryExplosion && afterImpact >= 50) {
+            if (!secondaryExplosion && afterImpact >= SECONDARY_EXPLOSION_TICK) {
                 secondaryExplosion = true;
                 triggerSecondaryExplosion();
             }
-            if (afterImpact > 110) {
+            if (afterImpact > 70) {
                 cancelAll();
             }
         }
@@ -154,34 +161,41 @@ public final class MeteorDirector {
                 continue;
             }
 
-            double x;
-            double y;
-            double z;
             double scale;
+            double centerX;
+            double centerY;
+            double centerZ;
             double spin;
 
             if (i == 0) {
-                scale = 2.35 * pulse;
-                x = scale * 0.5;
-                y = yOffset - 1.0;
-                z = scale * 0.5;
+                scale = CORE_SCALE * pulse;
+                centerX = 0.0;
+                centerY = yOffset + CORE_SCALE * 0.5 - 1.0;
+                centerZ = 0.0;
                 spin = age * 0.18;
             } else {
                 int shellIndex = i - 1;
                 double angle = age * 0.22 + shellIndex * (2.0 * PI / 6.0);
-                double radius = 1.55 + Math.sin(age * 0.14 + shellIndex) * 0.08;
-                scale = 0.95 * pulse;
-                x = Math.cos(angle) * radius + scale * 0.5;
-                y = yOffset - 1.0 + Math.sin(age * 0.2 + shellIndex) * 0.16 - scale * 0.5;
-                z = Math.sin(angle) * radius + scale * 0.5;
+                double radius = SHELL_RADIUS + Math.sin(age * 0.14 + shellIndex) * 0.06;
+                scale = SHELL_SCALE * pulse;
+                centerX = Math.cos(angle) * radius;
+                centerY = yOffset + CORE_SCALE * 0.5 - 1.0
+                        + Math.sin(age * 0.2 + shellIndex) * 0.14;
+                centerZ = Math.sin(angle) * radius;
                 spin = age * 0.18 + shellIndex * 0.7;
             }
 
+            // The block model is anchored at its bottom-north-west corner. Build
+            // the transformation from the desired visual center instead of
+            // adding a scale offset to each orbit coordinate; this keeps every
+            // companion centered on the same orbit around the core.
+            Display.Vector3f translation = centeredTranslation(
+                    centerX, centerY, centerZ, scale, spin);
             display.getDisplay().setTransformation(new Display.DisplayTransformation(
-                    new Display.Vector3f((float) x, (float) y, (float) z),
+                    translation,
                     new Display.Vector3f((float) scale, (float) scale, (float) scale),
                     quaternionY(spin),
-                    quaternionY(-spin * 0.6)));
+                    quaternionY(0.0)));
         }
 
         Display.TextDisplayEntity activeLabel = label;
@@ -273,13 +287,13 @@ public final class MeteorDirector {
     }
 
     private void updateImpactResidue() {
-        // Hold the initial flash before the ordered surface pulse begins.
-        if (afterImpact >= GRADIENT_DELAY && afterImpact <= GRADIENT_DELAY + GRADIENT_TICKS) {
-            int elapsed = afterImpact - GRADIENT_DELAY;
-            if (elapsed % 2 == 0) {
-                int radius = Math.min(CRATER_RADIUS, elapsed / 2);
-                paintSurfaceWave(radius);
-            }
+        // Start with a readable inner ring, then accelerate from one ring every
+        // two ticks to one ring per tick as the pulse approaches the outer edge.
+        if (gradientRadius <= CRATER_RADIUS && afterImpact >= nextPulseTick) {
+            paintSurfaceWave(gradientRadius);
+            gradientRadius++;
+            int interval = gradientRadius < 5 ? 2 : 1;
+            nextPulseTick = afterImpact + interval;
         }
 
         Position ember = new Position(impact.x(), impact.y() + 0.8, impact.z());
@@ -484,6 +498,27 @@ public final class MeteorDirector {
     private int stateId(String blockName) {
         World.Block block = world.getBlockByName(blockName);
         return block == null ? 0 : block.defaultStateId;
+    }
+
+    private Display.Vector3f centeredTranslation(
+            double centerX,
+            double centerY,
+            double centerZ,
+            double scale,
+            double yaw) {
+        double half = scale * 0.5;
+        double cos = Math.cos(yaw);
+        double sin = Math.sin(yaw);
+        // The display matrix applies the left rotation before the final
+        // translation. Rotate the model center around the block-display pivot
+        // so the final translation can place that center exactly at the orbit
+        // coordinate.
+        double rotatedX = half * (cos + sin);
+        double rotatedZ = half * (cos - sin);
+        return new Display.Vector3f(
+                (float) (centerX - rotatedX),
+                (float) (centerY - half),
+                (float) (centerZ - rotatedZ));
     }
 
     private Display.Quaternionf quaternionY(double angle) {
