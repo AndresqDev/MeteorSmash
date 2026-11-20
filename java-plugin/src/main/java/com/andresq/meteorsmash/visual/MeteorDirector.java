@@ -27,7 +27,7 @@ public final class MeteorDirector {
     private static final int FALL_TICKS = 44;
     private static final int ALTITUDE = 27;
     private static final int CRATER_RADIUS = 14;
-    private static final int GRADIENT_DELAY = 3;
+    private static final int GRADIENT_DELAY = 2;
     private static final int SECONDARY_EXPLOSION_TICK = 24;
     private static final double CORE_SCALE = 2.1;
     private static final double SHELL_SCALE = 0.78;
@@ -292,7 +292,14 @@ public final class MeteorDirector {
         if (gradientRadius <= CRATER_RADIUS && afterImpact >= nextPulseTick) {
             paintSurfaceWave(gradientRadius);
             gradientRadius++;
-            int interval = gradientRadius < 5 ? 2 : 1;
+            int interval;
+            if (gradientRadius <= 1) {
+                interval = 3;
+            } else if (gradientRadius < 5) {
+                interval = 2;
+            } else {
+                interval = 1;
+            }
             nextPulseTick = afterImpact + interval;
         }
 

@@ -43,9 +43,9 @@ The impact uses actual world block changes rather than only display entities, so
 
 - fall: 44 ticks;
 - impact particles: immediate burst;
-- surface gradient: 3-tick hold, then rings 0-4 every 2 ticks and rings 5-14 every tick;
+- surface gradient: 2-tick hold, then a 3/2/1-tick ring cadence out to radius 14;
 - gradient fire: none; surface fire is cleared while the color pulse passes;
-- secondary explosion: triggered 24 ticks after impact;
+- secondary explosion: triggered 24 ticks after impact, three ticks after the outer ring;
 - residue: 70 ticks after impact before the task is cancelled;
 - display interpolation: disabled; transforms are recomputed once per tick.
 
