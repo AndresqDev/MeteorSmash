@@ -102,7 +102,7 @@ See [VISUAL.md](VISUAL.md) for the composition, public particle/sound identifier
 Published at:
 
 ```text
-https://github.com/AndresqDev/MeteorSmash/releases/tag/v0.1.2
+https://github.com/AndresqDev/MeteorSmash/releases/tag/v0.1.3
 ```
 
 ## License

@@ -198,10 +198,8 @@ public final class MeteorDirector {
     private void spawnFallingTrail(Position trail, double progress) {
         world.spawnParticle(Particles.Particle.FLAME, trail, new Position(0.9, 1.6, 0.9), 18, 0.05);
         world.spawnParticle(Particles.Particle.LAVA, trail, new Position(0.7, 1.1, 0.7), 8, 0.03);
-        world.spawnParticle(Particles.Particle.CLOUD, trail, new Position(1.8, 1.8, 1.8), 7, 0.015);
         world.spawnParticle(Particles.Particle.FIREWORK, trail, new Position(0.9, 0.9, 0.9), 3, 0.03);
         world.spawnParticle(Particles.Particle.END_ROD, trail, new Position(0.6, 0.6, 0.6), 2, 0.01);
-        world.spawnParticle(Particles.Particle.DRAGON_BREATH, trail, new Position(1.2, 1.4, 1.2), 2, 0.015);
 
         for (int i = 0; i < 8; i++) {
             double angle = age * 0.55 + i * (2.0 * PI / 8.0);
@@ -211,7 +209,6 @@ public final class MeteorDirector {
             double z = trail.z() + Math.sin(angle) * radius;
             Position irregular = new Position(x, y, z);
 
-            world.spawnParticle(Particles.Particle.CLOUD, irregular, new Position(0.35, 0.35, 0.35), 2, 0.02);
             world.spawnParticle(Particles.Particle.FLAME, irregular, new Position(0.25, 0.25, 0.25), 1, 0.02);
             if (i % 2 == 0) {
                 world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, irregular, new Position(0.25, 0.25, 0.25), 1, 0.01);
@@ -263,13 +260,12 @@ public final class MeteorDirector {
 
         world.spawnParticle(Particles.Particle.EXPLOSION_EMITTER, impact, new Position(1.0, 1.0, 1.0), 6, 0.02);
         world.spawnParticle(Particles.Particle.EXPLOSION, impact, new Position(3.0, 2.0, 3.0), 34, 0.12);
-        world.spawnParticle(Particles.Particle.FLAME, impact, new Position(5.0, 3.0, 5.0), 120, 0.12);
-        world.spawnParticle(Particles.Particle.LAVA, impact, new Position(4.0, 2.0, 4.0), 60, 0.08);
-        world.spawnParticle(Particles.Particle.SMOKE, impact, new Position(5.0, 4.0, 5.0), 45, 0.06);
-        world.spawnParticle(Particles.Particle.CLOUD, impact, new Position(5.0, 4.0, 5.0), 25, 0.04);
-        world.spawnParticle(Particles.Particle.FIREWORK, impact, new Position(3.0, 3.0, 3.0), 42, 0.12);
+        world.spawnParticle(Particles.Particle.FLAME, impact, new Position(5.0, 3.0, 5.0), 140, 0.12);
+        world.spawnParticle(Particles.Particle.LAVA, impact, new Position(4.0, 2.0, 4.0), 70, 0.08);
+        world.spawnParticle(Particles.Particle.FIREWORK, impact, new Position(3.0, 3.0, 3.0), 50, 0.12);
+        world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, impact, new Position(4.0, 3.0, 4.0), 35, 0.08);
+        world.spawnParticle(Particles.Particle.ELECTRIC_SPARK, impact, new Position(4.0, 3.0, 4.0), 30, 0.06);
         world.spawnParticle(Particles.Particle.END_ROD, impact, new Position(4.0, 4.0, 4.0), 26, 0.08);
-        world.spawnParticle(Particles.Particle.DRAGON_BREATH, impact, new Position(4.0, 4.0, 4.0), 20, 0.06);
         initSurfaceCache();
     }
 
@@ -281,7 +277,6 @@ public final class MeteorDirector {
 
         Position ember = new Position(impact.x(), impact.y() + 0.8, impact.z());
         world.spawnParticle(Particles.Particle.FLAME, ember, new Position(3.4, 0.8, 3.4), 8, 0.02);
-        world.spawnParticle(Particles.Particle.SMOKE, ember, new Position(3.4, 1.6, 3.4), 6, 0.015);
         world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, ember, new Position(2.8, 0.8, 2.8), 4, 0.015);
 
         if (afterImpact % 12 == 0) {
@@ -333,7 +328,6 @@ public final class MeteorDirector {
                     Position top = new Position(blockX + 0.5, surface + 1.2, blockZ + 0.5);
                     world.spawnParticle(Particles.Particle.FLAME, top, new Position(0.25, 0.3, 0.25), 2, 0.02);
                     world.spawnParticle(Particles.Particle.LAVA, top, new Position(0.2, 0.25, 0.2), 1, 0.02);
-                    world.spawnParticle(Particles.Particle.CLOUD, top, new Position(0.35, 0.5, 0.35), 2, 0.015);
                     world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, top, new Position(0.2, 0.2, 0.2), 1, 0.01);
                     if (distance >= 3.0) {
                         world.spawnParticle(Particles.Particle.EXPLOSION, top, new Position(0.4, 0.4, 0.4), 1, 0.02);

@@ -9,8 +9,8 @@ The effect uses the visual primitives available in the Pumpkin 0.1.2 WIT API.
 | Meteor core | `BLOCK_DISPLAY` with `minecraft:magma_block` |
 | Rotating shell | six `BLOCK_DISPLAY` entities using obsidian, netherrack, blackstone, crying obsidian and magma |
 | Motion | `DisplayTransformation` translation and quaternion rotation updated once per tick |
-| Trail | `FLAME`, `LAVA`, `LARGE_SMOKE`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` particles |
-| Impact | expanding particle shockwave with `EXPLOSION_EMITTER`, `EXPLOSION`, `FLAME`, `LAVA`, `LARGE_SMOKE`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` |
+| Trail | `FLAME`, `LAVA`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` particles |
+| Impact | expanding particle shockwave with `EXPLOSION_EMITTER`, `EXPLOSION`, `FLAME`, `LAVA`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` |
 | Crater | post-explosion surface scan and palette wave across the nearest air-exposed block in each column |
 | Fire | deterministic fire placed on the nearest air-exposed support block, never in mid-air |
 | Label | `TEXT_DISPLAY` with a centered gold `METEOR` billboard |
