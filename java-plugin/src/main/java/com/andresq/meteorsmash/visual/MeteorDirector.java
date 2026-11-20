@@ -158,19 +158,19 @@ public final class MeteorDirector {
             double spin;
 
             if (i == 0) {
-                x = 0.0;
-                y = yOffset;
-                z = 0.0;
-                scale = 2.5 * pulse;
+                scale = 2.35 * pulse;
+                x = scale * 0.5;
+                y = yOffset - 1.0;
+                z = scale * 0.5;
                 spin = age * 0.18;
             } else {
                 int shellIndex = i - 1;
                 double angle = age * 0.22 + shellIndex * (2.0 * PI / 6.0);
-                double radius = 1.65 + Math.sin(age * 0.14 + shellIndex) * 0.10;
-                x = Math.cos(angle) * radius;
-                y = yOffset + Math.sin(age * 0.2 + shellIndex) * 0.24;
-                z = Math.sin(angle) * radius;
-                scale = 1.08 * pulse;
+                double radius = 1.55 + Math.sin(age * 0.14 + shellIndex) * 0.08;
+                scale = 0.95 * pulse;
+                x = Math.cos(angle) * radius + scale * 0.5;
+                y = yOffset - 1.0 + Math.sin(age * 0.2 + shellIndex) * 0.16 - scale * 0.5;
+                z = Math.sin(angle) * radius + scale * 0.5;
                 spin = age * 0.18 + shellIndex * 0.7;
             }
 

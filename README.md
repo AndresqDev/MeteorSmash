@@ -37,11 +37,11 @@ The animation is driven by one `everyTicks` task. There are no gameplay threads 
 |---|---|
 | Pumpkin Abs | 0.2.1 |
 | Pumpkin Stub | 0.2.0 |
-| J2KT Pumpkin | 0.1.4 |
+| J2KT Pumpkin | 0.1.5 |
 | Pumpkin Kotlin/Wasm API | 0.1.2 |
 | Pumpkin plugin WIT | `pumpkin:plugin@0.1.0` (synchronous) |
 
-Stub 0.2.0 and J2KT 0.1.4 provide the particle, custom-sound, block-state, explosion, entity-teleport and entity-removal APIs used by the meteor.
+Stub 0.2.0 and J2KT 0.1.5 provide the particle, custom-sound, block-state, explosion, entity-teleport and entity-removal APIs used by the meteor.
 
 ## Build
 
@@ -102,7 +102,7 @@ See [VISUAL.md](VISUAL.md) for the composition, public particle/sound identifier
 Published at:
 
 ```text
-https://github.com/AndresqDev/MeteorSmash/releases/tag/v0.1.3
+https://github.com/AndresqDev/MeteorSmash/releases/tag/v0.1.4
 ```
 
 ## License

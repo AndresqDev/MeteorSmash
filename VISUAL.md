@@ -16,6 +16,20 @@ The effect uses the visual primitives available in the Pumpkin 0.1.2 WIT API.
 | Label | `TEXT_DISPLAY` with a centered gold `METEOR` billboard |
 | Audio | custom Minecraft resource identifiers for dragon, blaze, explosion, thunder and fire sounds |
 
+## Display alignment
+
+A block display's transformation pivot is the bottom-north-west corner of the block model, not its center. The effect therefore uses:
+
+```text
+translationX = orbitX + scale / 2
+translationY = orbitY - 1.0 - scale / 2
+translationZ = orbitZ + scale / 2
+```
+
+The `-1.0` accounts for the impact position being one block above the ground surface. The half-scale offsets center each block around its intended orbit position. Interpolation is disabled so the core and shell cannot lag into visibly different positions.
+
+Block changes use `BlockFlags(notifyNeighbors=true, notifyListeners=true, forceState=true)`. Without the listener flag the server changes the chunk state but does not send the client the corresponding block update.
+
 ## Why mixed composition
 
 A pure block-display meteor gives crisp geometry but no volumetric trail. A pure particle meteor is atmospheric but loses the recognizable block silhouette. The mixed version uses block displays for the readable meteor body and real particles for motion, heat and impact.
