@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.andresq.meteorsmash"
-version = "0.1.7"
+version = "0.1.8"
 
 val targetRoot = layout.projectDirectory.dir("target")
 val targetKotlin = targetRoot.dir("kotlin")

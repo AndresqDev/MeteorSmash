@@ -21,7 +21,7 @@ import pumpkin.World;
  *
  * Block displays form the readable meteor body, a multi-particle trail carries
  * the motion, and an accelerating ground-charge sequence prepares the impact:
- * rotating surface rings and radial spokes run outward before the meteor lands.
+ * rotating block-display rings run outward before the meteor lands.
  */
 public final class MeteorDirector {
     private static final int FALL_TICKS = 44;
@@ -29,7 +29,14 @@ public final class MeteorDirector {
     private static final int CHARGE_RADIUS = 14;
     private static final int CHARGE_START_AGE = 6;
     private static final int CHARGE_RING_COUNT = 3;
+    private static final int CHARGE_SEGMENTS = 48;
     private static final double CHARGE_RING_GAP = 4.5;
+    private static final double CHARGE_BLOCK_SCALE = 0.85;
+    private static final String[] CHARGE_BLOCK_NAMES = {
+            "minecraft:sea_lantern",
+            "minecraft:glowstone",
+            "minecraft:magma_block"
+    };
     private static final int SECONDARY_EXPLOSION_TICK = 24;
     private static final double CORE_SCALE = 2.1;
     private static final double SHELL_SCALE = 0.78;
@@ -40,6 +47,7 @@ public final class MeteorDirector {
 
     private final MeteorSmashPlugin plugin;
     private final List<Display.BlockDisplayEntity> blockDisplays = new ArrayList<>();
+    private final List<Display.BlockDisplayEntity> chargeDisplays = new ArrayList<>();
     private final List<World.Entity> displayEntities = new ArrayList<>();
 
     private ScheduledTask task = null;
@@ -49,6 +57,7 @@ public final class MeteorDirector {
     private int generation;
     private int age;
     private int afterImpact;
+    private boolean chargeFieldSpawned;
     private boolean impacted;
     private boolean secondaryExplosion;
 
@@ -73,6 +82,7 @@ public final class MeteorDirector {
         impact = new Position(targetX + 0.5, ground + 1.0, targetZ + 0.5);
         age = 0;
         afterImpact = 0;
+        chargeFieldSpawned = false;
         impacted = false;
         secondaryExplosion = false;
 
@@ -106,6 +116,7 @@ public final class MeteorDirector {
         removeDisplays();
         impacted = false;
         secondaryExplosion = false;
+        chargeFieldSpawned = false;
         age = 0;
         afterImpact = 0;
     }
@@ -287,127 +298,76 @@ public final class MeteorDirector {
     }
 
     /**
-     * Draws the orbital-charge style ground field while the meteor is falling.
-     * The wave is purely visual: it never changes terrain blocks. Rings are
-     * anchored to the impact ground plane and expand with an accelerating
-     * radius so the build-up reaches the target exactly when the meteor lands.
+     * Drives the pre-impact charge as luminous block-display rings. The field is
+     * purely visual, never edits terrain, and expands with an accelerating
+     * radius so the outer ring reaches the target when the meteor lands.
      */
     private void updateChargeEffect() {
         if (age < CHARGE_START_AGE) {
             return;
         }
+        if (!chargeFieldSpawned) {
+            spawnChargeField();
+            chargeFieldSpawned = true;
+        }
+
         double raw = (age - CHARGE_START_AGE + 1.0) / (FALL_TICKS - CHARGE_START_AGE);
         double progress = Math.pow(Math.min(1.0, raw), 1.45);
         double outerRadius = CHARGE_RADIUS * progress;
 
-        if (outerRadius < 0.8) {
-            drawChargeCenter();
-            return;
-        }
-
         for (int ring = 0; ring < CHARGE_RING_COUNT; ring++) {
             double radius = outerRadius - ring * CHARGE_RING_GAP;
-            if (radius >= 0.8) {
-                drawChargeRing(radius, ring);
-            }
-        }
-        drawChargeSpokes(outerRadius);
-        drawChargeCenter();
-    }
-
-    private void drawChargeRing(double radius, int ringIndex) {
-        int samples = Math.max(20, Math.min(72, (int) (radius * 6.0)));
-        double rotation = age * 0.16 + ringIndex * 0.8;
-
-        for (int i = 0; i < samples; i++) {
-            double angle = rotation + i * (2.0 * PI / samples);
-            if (Math.sin(angle * 3.0 - age * 0.28) < -0.55) {
-                continue;
-            }
-
-            int dx = (int) Math.round(Math.cos(angle) * radius);
-            int dz = (int) Math.round(Math.sin(angle) * radius);
-            Position point = chargePoint(dx, dz, 1.25);
-            if (point == null) {
-                continue;
-            }
-
-            world.spawnParticle(
-                    chargeParticle(ringIndex, false),
-                    point,
-                    new Position(0.06, 0.12, 0.06),
-                    1,
-                    0.01);
-            if ((i + ringIndex) % 3 == 0) {
-                world.spawnParticle(
-                        chargeParticle(ringIndex, true),
-                        point,
-                        new Position(0.05, 0.10, 0.05),
-                        1,
-                        0.005);
-            }
-        }
-    }
-
-    private void drawChargeSpokes(double outerRadius) {
-        int spokes = 6;
-        int steps = Math.max(2, (int) Math.ceil(outerRadius));
-        double baseAngle = age * 0.12;
-
-        for (int spoke = 0; spoke < spokes; spoke++) {
-            double angle = baseAngle + spoke * (2.0 * PI / spokes);
-            for (int step = 1; step <= steps; step++) {
-                double radius = outerRadius * step / steps;
-                int dx = (int) Math.round(Math.cos(angle) * radius);
-                int dz = (int) Math.round(Math.sin(angle) * radius);
-                Position point = chargePoint(dx, dz, 1.10);
-                if (point == null) {
+            for (int segment = 0; segment < CHARGE_SEGMENTS; segment++) {
+                Display.BlockDisplayEntity display = chargeDisplays.get(ring * CHARGE_SEGMENTS + segment);
+                if (radius < 0.75) {
+                    setChargeTransform(display, 0.0, 0.0, 0.0, 0.001, 0.0);
                     continue;
                 }
 
-                world.spawnParticle(
-                        Particles.Particle.ELECTRIC_SPARK,
-                        point,
-                        new Position(0.05, 0.10, 0.05),
-                        1,
-                        0.005);
-                if (step % 3 == 0) {
-                    world.spawnParticle(
-                            Particles.Particle.END_ROD,
-                            point,
-                            new Position(0.04, 0.08, 0.04),
-                            1,
-                            0.004);
+                double angle = age * 0.14 + ring * 0.35
+                        + segment * (2.0 * PI / CHARGE_SEGMENTS);
+                if (Math.sin(angle * 3.0 - age * 0.28) < -0.85) {
+                    setChargeTransform(display, 0.0, 0.0, 0.0, 0.001, 0.0);
+                    continue;
                 }
+
+                double centerX = Math.cos(angle) * radius;
+                double centerZ = Math.sin(angle) * radius;
+                double centerY = -0.50 + Math.sin(age * 0.2 + segment * 0.4) * 0.04;
+                setChargeTransform(display, centerX, centerY, centerZ, CHARGE_BLOCK_SCALE, angle + PI * 0.5);
             }
         }
     }
 
-    private void drawChargeCenter() {
-        Position center = chargePoint(0, 0, 1.5);
-        if (center == null) {
-            return;
+    private void spawnChargeField() {
+        for (int ring = 0; ring < CHARGE_RING_COUNT; ring++) {
+            String blockName = CHARGE_BLOCK_NAMES[Math.min(ring, CHARGE_BLOCK_NAMES.length - 1)];
+            for (int segment = 0; segment < CHARGE_SEGMENTS; segment++) {
+                Display.BlockDisplayEntity display = spawnBlockDisplay(blockName);
+                display.getDisplay().setBrightness(0xF000F0);
+                display.getDisplay().setShadowRadius(0.0f);
+                display.getDisplay().setShadowStrength(0.0f);
+                display.getDisplay().setViewRange(3.0f);
+                display.getDisplay().setInterpolationDuration(0);
+                display.getDisplay().setInterpolationStart(0);
+                chargeDisplays.add(display);
+            }
         }
-        world.spawnParticle(Particles.Particle.END_ROD, center, new Position(0.25, 0.18, 0.25), 2, 0.01);
-        world.spawnParticle(Particles.Particle.ELECTRIC_SPARK, center, new Position(0.35, 0.22, 0.35), 2, 0.01);
-        world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, center, new Position(0.25, 0.16, 0.25), 1, 0.01);
     }
 
-    private Particles.Particle chargeParticle(int ringIndex, boolean secondary) {
-        if (ringIndex == 0) {
-            return secondary ? Particles.Particle.ELECTRIC_SPARK : Particles.Particle.END_ROD;
-        }
-        if (ringIndex == 1) {
-            return secondary ? Particles.Particle.SOUL_FIRE_FLAME : Particles.Particle.ELECTRIC_SPARK;
-        }
-        return secondary ? Particles.Particle.LAVA : Particles.Particle.FLAME;
-    }
-
-    private Position chargePoint(int dx, int dz, double lift) {
-        int centerX = (int) Math.floor(impact.x());
-        int centerZ = (int) Math.floor(impact.z());
-        int groundY = (int) Math.floor(impact.y()) - 1;
-        return new Position(centerX + dx + 0.5, groundY + lift, centerZ + dz + 0.5);
+    private void setChargeTransform(
+            Display.BlockDisplayEntity display,
+            double centerX,
+            double centerY,
+            double centerZ,
+            double scale,
+            double yaw) {
+        Display.Vector3f translation = centeredTranslation(centerX, centerY, centerZ, scale, yaw);
+        display.getDisplay().setTransformation(new Display.DisplayTransformation(
+                translation,
+                new Display.Vector3f((float) scale, (float) scale, (float) scale),
+                quaternionY(yaw),
+                quaternionY(0.0)));
     }
 
     private void spawnCore() {
@@ -483,6 +443,8 @@ public final class MeteorDirector {
         }
         displayEntities.clear();
         blockDisplays.clear();
+        chargeDisplays.clear();
+        chargeFieldSpawned = false;
         label = null;
     }
 

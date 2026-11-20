@@ -20,7 +20,7 @@ public final class MeteorSmashPlugin extends PumpkinAbsPlugin {
     public PluginMetadata metadata() {
         return new PluginMetadata(
                 "meteorsmash",
-                "0.1.7",
+                "0.1.8",
                 List.of("Andresq"),
                 "Cinematic block-display meteor with a burning impact crater.",
                 List.of(),

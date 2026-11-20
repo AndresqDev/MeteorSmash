@@ -10,8 +10,8 @@ The effect uses the visual primitives available in the Pumpkin 0.1.2 WIT API.
 | Rotating shell | six `BLOCK_DISPLAY` entities using obsidian, netherrack, blackstone, crying obsidian and magma |
 | Motion | center-based `DisplayTransformation` orbit and rotation updated once per tick |
 | Trail | `FLAME`, `LAVA`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` particles |
-| Pre-impact charge | three rotating particle rings and six radial spokes expanding across the target ground plane |
-| Charge palette | outer `END_ROD`/`ELECTRIC_SPARK`, middle `SOUL_FIRE_FLAME`/`ELECTRIC_SPARK`, inner `FLAME`/`LAVA` |
+| Pre-impact charge | three rotating block-display rings, 48 luminous blocks per ring |
+| Charge palette | outer sea lantern, middle glowstone, inner magma block |
 | Impact | expanding particle shockwave with `EXPLOSION_EMITTER`, `EXPLOSION`, `FLAME`, `LAVA`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` |
 | Crater | real explosion only; the charge field never edits terrain |
 | Fire | the initial explosion can ignite supported surface blocks; no fire is added by the charge field |
@@ -33,13 +33,11 @@ translationZ = centerZ - rotatedCenterZ
 
 The core center is `(impact.x, ground + CORE_SCALE / 2, impact.z)`. Each companion center is placed on a close orbit of radius `1.52` around that same point. The `-1.0` in the vertical center accounts for the impact position being one block above the ground surface. Interpolation is disabled so the core and companions cannot lag into visibly different positions.
 
-Block changes use `BlockFlags(notifyNeighbors=true, notifyListeners=true, forceState=true)`. Without the listener flag the server changes the chunk state but does not send the client the corresponding block update.
-
 ## Why mixed composition
 
 A pure block-display meteor gives crisp geometry but no volumetric trail. A pure particle meteor is atmospheric but loses the recognizable block silhouette. The mixed version uses block displays for the readable meteor body and real particles for motion, heat and impact.
 
-The impact uses actual world block changes rather than only display entities, so the destroyed crater is visible to the server simulation. After the initial explosion there is a 3-tick hold, then an ordered pulse repaints surface columns within radius 14. The first five rings open every two ticks; from radius 5 onward one new ring opens each tick, producing a visible acceleration toward the climax. Each ring rotates through a warm palette (magma, netherrack, terracotta tones, blackstone, basalt, obsidian) and the pulse does not create fire, so the material colors remain readable. A second explosion closes the sequence at tick 24. Displays are removed at impact through an explicit cleanup sweep, and a per-run generation token prevents a stale task from leaving the magma core behind.
+The anticipation is a block charge field, not a post-impact repaint. Starting six ticks into the fall, three rings of luminous block displays run outward from the target. Each ring has 48 blocks, uses a rotating arc pattern, and is offset from the next ring by 4.5 blocks. The radial wave uses `radius = 14 * progress^1.45`, so the outer edge accelerates toward the target and reaches radius 14 on the last fall tick. The rings never change terrain blocks, never create fire, and are anchored to the impact ground plane. The meteor impact is the climax; a secondary explosion follows at tick 24 as an aftershock. Displays are removed at impact through an explicit cleanup sweep, and a per-run generation token prevents a stale task from leaving the magma core behind.
 
 ## Timing
 
@@ -47,7 +45,8 @@ The impact uses actual world block changes rather than only display entities, so
 - charge start: fall tick 6;
 - charge radius: 14 blocks, accelerating with `progress^1.45`;
 - charge completion: fall tick 43, one tick before impact;
-- charge fire: none; the field is particle-only;
+- charge fire: none; the field is display-only;
+- charge composition: 3 rings x 48 block displays;
 - impact particles: immediate burst;
 - secondary explosion: triggered 24 ticks after impact;
 - residue: 70 ticks after impact before the task is cancelled;
