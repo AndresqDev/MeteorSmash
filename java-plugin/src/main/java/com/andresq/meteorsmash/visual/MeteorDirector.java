@@ -19,14 +19,14 @@ import pumpkin.World;
 /**
  * Drives one meteor animation from a single repeating server-tick task.
  *
- * The meteor is a mixed composition: block-display entities form the falling
- * core and shell, real particles form the trail, and the impact mutates the
- * world into a layered crater. No gameplay state is accessed from another
- * thread.
+ * Block displays form the readable meteor body, particles provide the heat
+ * and motion, and the impact wave mutates real blocks into a supported,
+ * layered crater. No gameplay state is accessed from another thread.
  */
 public final class MeteorDirector {
     private static final int FALL_TICKS = 64;
     private static final int ALTITUDE = 30;
+    private static final int CRATER_RADIUS = 6;
     private static final double TARGET_DISTANCE = 14.0;
     private static final double PI = 3.141592653589793;
     private static final double DEG_TO_RAD = 0.017453292519943295;
@@ -39,8 +39,10 @@ public final class MeteorDirector {
     private World world;
     private Position impact;
     private Display.TextDisplayEntity label = null;
+    private int generation;
     private int age;
     private int afterImpact;
+    private int carvedRadius;
     private boolean impacted;
 
     public MeteorDirector(MeteorSmashPlugin plugin) {
@@ -49,6 +51,7 @@ public final class MeteorDirector {
 
     public void summon(Player player) {
         cancelAll();
+        int token = ++generation;
 
         world = player.getWorld();
         Position playerPosition = player.getPosition();
@@ -63,6 +66,7 @@ public final class MeteorDirector {
         impact = new Position(targetX + 0.5, ground + 1.0, targetZ + 0.5);
         age = 0;
         afterImpact = 0;
+        carvedRadius = 0;
         impacted = false;
 
         spawnCore();
@@ -82,27 +86,28 @@ public final class MeteorDirector {
                 1.5f,
                 0.7f);
 
-        task = plugin.getTasks().everyTicks(1, 1, server -> tick());
+        task = plugin.getTasks().everyTicks(1, 1, server -> tick(token));
     }
 
     public void cancelAll() {
+        generation++;
         ScheduledTask activeTask = task;
         if (activeTask != null) {
             activeTask.cancel();
         }
         task = null;
-        for (World.Entity entity : displayEntities) {
-            entity.remove();
-        }
-        displayEntities.clear();
-        blockDisplays.clear();
-        label = null;
+        removeDisplays();
         impacted = false;
         age = 0;
         afterImpact = 0;
+        carvedRadius = 0;
     }
 
-    private void tick() {
+    private void tick(int token) {
+        if (token != generation) {
+            return;
+        }
+
         if (!impacted) {
             updateFallingMeteor();
             age++;
@@ -112,14 +117,15 @@ public final class MeteorDirector {
         } else {
             afterImpact++;
             updateImpactResidue();
-            if (afterImpact > 80) {
+            if (afterImpact > 100) {
                 cancelAll();
             }
         }
     }
 
     private void updateFallingMeteor() {
-        double progress = (double) age / FALL_TICKS;
+        double rawProgress = (double) age / FALL_TICKS;
+        double progress = rawProgress * rawProgress;
         double yOffset = (1.0 - progress) * ALTITUDE;
         double pulse = 1.0 + Math.sin(age * 0.45) * 0.08;
 
@@ -129,13 +135,28 @@ public final class MeteorDirector {
                 continue;
             }
 
-            double angle = age * 0.22 + i * (2.0 * PI / Math.max(1, blockDisplays.size()));
-            double radius = i == 0 ? 0.0 : 2.1 + Math.sin(age * 0.14 + i) * 0.25;
-            double x = Math.cos(angle) * radius;
-            double z = Math.sin(angle) * radius;
-            double y = yOffset + (i == 0 ? 0.0 : Math.sin(age * 0.2 + i) * 0.45);
-            double scale = i == 0 ? 3.2 * pulse : 1.05 * pulse;
-            double spin = age * 0.18 + i * 0.7;
+            double x;
+            double y;
+            double z;
+            double scale;
+            double spin;
+
+            if (i == 0) {
+                x = 0.0;
+                y = yOffset;
+                z = 0.0;
+                scale = 3.45 * pulse;
+                spin = age * 0.18;
+            } else {
+                int shellIndex = i - 1;
+                double angle = age * 0.22 + shellIndex * (2.0 * PI / 6.0);
+                double radius = 1.82 + Math.sin(age * 0.14 + shellIndex) * 0.14;
+                x = Math.cos(angle) * radius;
+                y = yOffset + Math.sin(age * 0.2 + shellIndex) * 0.32;
+                z = Math.sin(angle) * radius;
+                scale = 1.22 * pulse;
+                spin = age * 0.18 + shellIndex * 0.7;
+            }
 
             display.getDisplay().setTransformation(new Display.DisplayTransformation(
                     new Display.Vector3f((float) x, (float) y, (float) z),
@@ -155,9 +176,23 @@ public final class MeteorDirector {
 
         double currentY = impact.y() + yOffset;
         Position trail = new Position(impact.x(), currentY, impact.z());
-        world.spawnParticle(Particles.Particle.FLAME, trail, new Position(0.7, 1.2, 0.7), 12, 0.04);
-        world.spawnParticle(Particles.Particle.LAVA, trail, new Position(0.5, 0.8, 0.5), 5, 0.03);
-        world.spawnParticle(Particles.Particle.LARGE_SMOKE, trail, new Position(1.2, 1.5, 1.2), 4, 0.02);
+        world.spawnParticle(Particles.Particle.FLAME, trail, new Position(0.8, 1.4, 0.8), 16, 0.045);
+        world.spawnParticle(Particles.Particle.LAVA, trail, new Position(0.6, 1.0, 0.6), 7, 0.03);
+        world.spawnParticle(Particles.Particle.LARGE_SMOKE, trail, new Position(1.6, 2.0, 1.6), 5, 0.02);
+        world.spawnParticle(Particles.Particle.LARGE_SMOKE, trail, new Position(0.8, 1.0, 0.8), 3, 0.015);
+        world.spawnParticle(Particles.Particle.FIREWORK, trail, new Position(0.8, 0.8, 0.8), 2, 0.03);
+        world.spawnParticle(Particles.Particle.END_ROD, trail, new Position(0.5, 0.5, 0.5), 1, 0.01);
+
+        for (int i = 0; i < 6; i++) {
+            double angle = age * 0.3 + i * (2.0 * PI / 6.0);
+            double radius = 1.7;
+            Position ember = new Position(
+                    trail.x() + Math.cos(angle) * radius,
+                    trail.y() + 0.2 + Math.sin(age * 0.2 + i) * 0.4,
+                    trail.z() + Math.sin(angle) * radius);
+            world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, ember, new Position(0.2, 0.2, 0.2), 1, 0.01);
+            world.spawnParticle(Particles.Particle.ELECTRIC_SPARK, ember, new Position(0.3, 0.3, 0.3), 1, 0.01);
+        }
 
         if (age % 8 == 0) {
             world.playCustomSound(
@@ -165,20 +200,14 @@ public final class MeteorDirector {
                     Sounds.SoundCategory.HOSTILE,
                     trail,
                     0.8f,
-                    0.65f + (float) progress * 0.6f);
+                    0.65f + (float) rawProgress * 0.6f);
         }
     }
 
     private void impact() {
         impacted = true;
         age = FALL_TICKS;
-
-        for (World.Entity entity : displayEntities) {
-            entity.remove();
-        }
-        displayEntities.clear();
-        blockDisplays.clear();
-        label = null;
+        removeDisplays();
 
         world.playCustomSound(
                 "minecraft:entity.generic.explode",
@@ -194,20 +223,28 @@ public final class MeteorDirector {
                 0.8f);
         world.createExplosion(impact, 5.5f, true);
 
-        world.spawnParticle(Particles.Particle.EXPLOSION_EMITTER, impact, new Position(1.0, 1.0, 1.0), 4, 0.02);
-        world.spawnParticle(Particles.Particle.EXPLOSION, impact, new Position(3.0, 2.0, 3.0), 24, 0.12);
-        world.spawnParticle(Particles.Particle.FLAME, impact, new Position(5.0, 3.0, 5.0), 90, 0.12);
-        world.spawnParticle(Particles.Particle.LAVA, impact, new Position(4.0, 2.0, 4.0), 45, 0.08);
-        world.spawnParticle(Particles.Particle.LARGE_SMOKE, impact, new Position(5.0, 4.0, 5.0), 55, 0.06);
-        world.spawnParticle(Particles.Particle.FIREWORK, impact, new Position(3.0, 3.0, 3.0), 30, 0.12);
+        world.spawnParticle(Particles.Particle.EXPLOSION_EMITTER, impact, new Position(1.0, 1.0, 1.0), 5, 0.02);
+        world.spawnParticle(Particles.Particle.EXPLOSION, impact, new Position(3.0, 2.0, 3.0), 30, 0.12);
+        world.spawnParticle(Particles.Particle.FLAME, impact, new Position(5.0, 3.0, 5.0), 110, 0.12);
+        world.spawnParticle(Particles.Particle.LAVA, impact, new Position(4.0, 2.0, 4.0), 55, 0.08);
+        world.spawnParticle(Particles.Particle.LARGE_SMOKE, impact, new Position(5.0, 4.0, 5.0), 65, 0.06);
+        world.spawnParticle(Particles.Particle.FIREWORK, impact, new Position(3.0, 3.0, 3.0), 36, 0.12);
+        world.spawnParticle(Particles.Particle.END_ROD, impact, new Position(4.0, 4.0, 4.0), 20, 0.08);
 
-        carveCrater();
+        carveWave(0);
+        carvedRadius = 1;
     }
 
     private void updateImpactResidue() {
+        if (carvedRadius <= CRATER_RADIUS && afterImpact % 2 == 0) {
+            carveWave(carvedRadius);
+            carvedRadius++;
+        }
+
         Position ember = new Position(impact.x(), impact.y() + 0.8, impact.z());
-        world.spawnParticle(Particles.Particle.FLAME, ember, new Position(2.8, 0.8, 2.8), 6, 0.02);
-        world.spawnParticle(Particles.Particle.LARGE_SMOKE, ember, new Position(3.2, 1.5, 3.2), 3, 0.015);
+        world.spawnParticle(Particles.Particle.FLAME, ember, new Position(2.8, 0.8, 2.8), 7, 0.02);
+        world.spawnParticle(Particles.Particle.LARGE_SMOKE, ember, new Position(3.2, 1.5, 3.2), 4, 0.015);
+        world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, ember, new Position(2.4, 0.8, 2.4), 3, 0.015);
 
         if (afterImpact % 12 == 0) {
             world.playCustomSound(
@@ -219,59 +256,84 @@ public final class MeteorDirector {
         }
     }
 
-    private void carveCrater() {
+    private void carveWave(int radius) {
         int centerX = (int) Math.floor(impact.x());
-        int centerY = (int) Math.floor(impact.y());
+        int centerY = (int) Math.floor(impact.y()) - 1;
         int centerZ = (int) Math.floor(impact.z());
-        int radius = 6;
         int bedrockState = stateId("minecraft:bedrock");
 
-        for (int x = -radius; x <= radius; x++) {
-            for (int z = -radius; z <= radius; z++) {
+        for (int x = -CRATER_RADIUS; x <= CRATER_RADIUS; x++) {
+            for (int z = -CRATER_RADIUS; z <= CRATER_RADIUS; z++) {
                 double distance = Math.sqrt((double) (x * x + z * z));
-                if (distance > radius) {
+                if (distance > radius || distance < radius - 1.0) {
                     continue;
                 }
 
-                for (int y = centerY - 1; y <= centerY + 1; y++) {
-                    BlockPos pos = new BlockPos(centerX + x, y, centerZ + z);
-                    if (bedrockState != 0 && world.getBlockStateId(pos) == bedrockState) {
-                        continue;
-                    }
+                BlockPos support = new BlockPos(centerX + x, centerY, centerZ + z);
+                BlockPos above = new BlockPos(centerX + x, centerY + 1, centerZ + z);
+                BlockPos below = new BlockPos(centerX + x, centerY - 1, centerZ + z);
 
-                    if (y == centerY) {
-                        if (distance <= 2.1) {
-                            world.setBlockByName(pos, "minecraft:magma_block");
-                        } else if (distance <= 4.8) {
-                            world.setBlockByName(pos, "minecraft:air");
-                        } else {
-                            world.setBlockByName(pos, "minecraft:blackstone");
-                        }
-                    } else if (distance <= 4.8) {
-                        world.setBlockByName(pos, "minecraft:air");
-                    }
+                setBlockSafe(below, "minecraft:air", bedrockState);
+                setBlockSafe(above, "minecraft:air", bedrockState);
+
+                if (distance <= 2.2) {
+                    setBlockSafe(support, "minecraft:magma_block", bedrockState);
+                } else if (distance <= 4.8) {
+                    setBlockSafe(support, "minecraft:netherrack", bedrockState);
+                } else {
+                    setBlockSafe(support, "minecraft:blackstone", bedrockState);
                 }
 
                 if (distance >= 2.0 && distance <= 5.2 && ((centerX + x + centerZ + z) & 1) == 0) {
-                    BlockPos fire = new BlockPos(centerX + x, centerY + 1, centerZ + z);
-                    if (world.getBlockStateId(fire) == 0) {
-                        world.setBlockByName(fire, "minecraft:fire");
-                    }
+                    setBlockSafe(above, "minecraft:fire", bedrockState);
                 }
             }
         }
+
+        spawnWaveParticles(radius);
+    }
+
+    private void spawnWaveParticles(int radius) {
+        int samples = 28;
+        for (int i = 0; i < samples; i++) {
+            double angle = i * (2.0 * PI / samples);
+            Position point = new Position(
+                    impact.x() + Math.cos(angle) * radius,
+                    impact.y() + 0.35,
+                    impact.z() + Math.sin(angle) * radius);
+            world.spawnParticle(Particles.Particle.FLAME, point, new Position(0.25, 0.35, 0.25), 2, 0.02);
+            world.spawnParticle(Particles.Particle.LAVA, point, new Position(0.2, 0.3, 0.2), 1, 0.02);
+            if (radius >= 3) {
+                world.spawnParticle(Particles.Particle.EXPLOSION, point, new Position(0.5, 0.5, 0.5), 1, 0.02);
+                world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, point, new Position(0.3, 0.3, 0.3), 1, 0.01);
+            }
+        }
+
+        if (radius == 3 || radius == 5) {
+            world.playCustomSound(
+                    "minecraft:entity.generic.explode",
+                    Sounds.SoundCategory.BLOCKS,
+                    new Position(impact.x(), impact.y() + 1.0, impact.z()),
+                    1.2f,
+                    0.65f);
+        }
+    }
+
+    private void setBlockSafe(BlockPos position, String block, int bedrockState) {
+        if (bedrockState != 0 && world.getBlockStateId(position) == bedrockState) {
+            return;
+        }
+        world.setBlockByName(position, block);
     }
 
     private void spawnCore() {
         Display.BlockDisplayEntity core = spawnBlockDisplay("minecraft:magma_block");
-        if (core != null) {
-            core.getDisplay().setBrightness(0xF000F0);
-            core.getDisplay().setShadowRadius(1.8f);
-            core.getDisplay().setShadowStrength(0.85f);
-            core.getDisplay().setViewRange(2.5f);
-            core.getDisplay().setInterpolationDuration(1);
-            core.getDisplay().setInterpolationStart(1);
-        }
+        core.getDisplay().setBrightness(0xF000F0);
+        core.getDisplay().setShadowRadius(1.8f);
+        core.getDisplay().setShadowStrength(0.85f);
+        core.getDisplay().setViewRange(2.5f);
+        core.getDisplay().setInterpolationDuration(1);
+        core.getDisplay().setInterpolationStart(1);
         blockDisplays.add(core);
     }
 
@@ -286,14 +348,12 @@ public final class MeteorDirector {
         };
         for (int i = 0; i < blocks.length; i++) {
             Display.BlockDisplayEntity part = spawnBlockDisplay(blocks[i]);
-            if (part != null) {
-                part.getDisplay().setBrightness(0xF000F0);
-                part.getDisplay().setShadowRadius(1.0f);
-                part.getDisplay().setShadowStrength(0.7f);
-                part.getDisplay().setViewRange(2.0f);
-                part.getDisplay().setInterpolationDuration(1);
-                part.getDisplay().setInterpolationStart(1);
-            }
+            part.getDisplay().setBrightness(0xF000F0);
+            part.getDisplay().setShadowRadius(1.0f);
+            part.getDisplay().setShadowStrength(0.7f);
+            part.getDisplay().setViewRange(2.0f);
+            part.getDisplay().setInterpolationDuration(1);
+            part.getDisplay().setInterpolationStart(1);
             blockDisplays.add(part);
         }
     }
@@ -330,6 +390,16 @@ public final class MeteorDirector {
         }
         display.setBlockStateId(stateId(blockName));
         return display;
+    }
+
+    private void removeDisplays() {
+        List<World.Entity> entities = new ArrayList<>(displayEntities);
+        for (World.Entity entity : entities) {
+            entity.remove();
+        }
+        displayEntities.clear();
+        blockDisplays.clear();
+        label = null;
     }
 
     private int findGround(int x, int z, int startY) {

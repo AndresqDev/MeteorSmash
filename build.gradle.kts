@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.andresq.meteorsmash"
-version = "0.1.0"
+version = "0.1.1"
 
 val targetRoot = layout.projectDirectory.dir("target")
 val targetKotlin = targetRoot.dir("kotlin")
@@ -141,4 +141,8 @@ tasks.named("build") {
 tasks.named("clean") {
     delete(targetRoot)
     dependsOn(":java-plugin:clean")
+}
+
+tasks.named("buildWasm") {
+    mustRunAfter(tasks.named("clean"))
 }
