@@ -26,8 +26,9 @@ import pumpkin.World;
 public final class MeteorDirector {
     private static final int FALL_TICKS = 44;
     private static final int ALTITUDE = 27;
-    private static final int CRATER_RADIUS = 8;
-    private static final int GRADIENT_TICKS = 26;
+    private static final int CRATER_RADIUS = 14;
+    private static final int GRADIENT_DELAY = 8;
+    private static final int GRADIENT_TICKS = CRATER_RADIUS * 2;
     private static final double TARGET_DISTANCE = 14.0;
     private static final double PI = 3.141592653589793;
     private static final double DEG_TO_RAD = 0.017453292519943295;
@@ -37,7 +38,9 @@ public final class MeteorDirector {
             "minecraft:red_terracotta",
             "minecraft:orange_terracotta",
             "minecraft:yellow_terracotta",
+            "minecraft:brown_terracotta",
             "minecraft:blackstone",
+            "minecraft:basalt",
             "minecraft:obsidian",
             "minecraft:crying_obsidian"
     };
@@ -129,11 +132,11 @@ public final class MeteorDirector {
         } else {
             afterImpact++;
             updateImpactResidue();
-            if (!secondaryExplosion && afterImpact >= 20) {
+            if (!secondaryExplosion && afterImpact >= 50) {
                 secondaryExplosion = true;
                 triggerSecondaryExplosion();
             }
-            if (afterImpact > 80) {
+            if (afterImpact > 110) {
                 cancelAll();
             }
         }
@@ -270,9 +273,13 @@ public final class MeteorDirector {
     }
 
     private void updateImpactResidue() {
-        if (afterImpact <= GRADIENT_TICKS) {
-            int radius = Math.min(CRATER_RADIUS, 1 + afterImpact);
-            paintSurfaceWave(radius, afterImpact);
+        // Hold the initial flash before the ordered surface pulse begins.
+        if (afterImpact >= GRADIENT_DELAY && afterImpact <= GRADIENT_DELAY + GRADIENT_TICKS) {
+            int elapsed = afterImpact - GRADIENT_DELAY;
+            if (elapsed % 2 == 0) {
+                int radius = Math.min(CRATER_RADIUS, elapsed / 2);
+                paintSurfaceWave(radius);
+            }
         }
 
         Position ember = new Position(impact.x(), impact.y() + 0.8, impact.z());
@@ -289,7 +296,7 @@ public final class MeteorDirector {
         }
     }
 
-    private void paintSurfaceWave(int radius, int phase) {
+    private void paintSurfaceWave(int radius) {
         int centerX = (int) Math.floor(impact.x());
         int centerY = (int) Math.floor(impact.y());
         int centerZ = (int) Math.floor(impact.z());
@@ -299,7 +306,7 @@ public final class MeteorDirector {
         for (int x = -CRATER_RADIUS; x <= CRATER_RADIUS; x++) {
             for (int z = -CRATER_RADIUS; z <= CRATER_RADIUS; z++) {
                 double distance = Math.sqrt((double) (x * x + z * z));
-                if (distance > radius) {
+                if (distance > radius || (radius > 0 && distance <= radius - 1.0)) {
                     continue;
                 }
 
@@ -316,13 +323,9 @@ public final class MeteorDirector {
                     continue;
                 }
 
-                int colorIndex = (phase + (int) Math.floor(distance * 1.7)) % PALETTE.length;
+                int colorIndex = (radius + 1) % PALETTE.length;
                 world.setBlockByName(support, PALETTE[colorIndex]);
                 world.setBlockByName(above, "minecraft:air");
-
-                if (distance >= 1.0 && ((phase + x + z) & 1) == 0) {
-                    world.setBlockByName(above, "minecraft:fire");
-                }
 
                 if ((x & 1) == 0 && (z & 1) == 0) {
                     Position top = new Position(blockX + 0.5, surface + 1.2, blockZ + 0.5);
