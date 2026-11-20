@@ -20,14 +20,16 @@ import pumpkin.World;
  * Drives one meteor animation from a single repeating server-tick task.
  *
  * Block displays form the readable meteor body, a multi-particle trail carries
- * the motion, and the post-impact surface pulse repaints the crater from the
- * center outward without adding new fire.
+ * the motion, and an accelerating ground-charge sequence prepares the impact:
+ * rotating surface rings and radial spokes run outward before the meteor lands.
  */
 public final class MeteorDirector {
     private static final int FALL_TICKS = 44;
     private static final int ALTITUDE = 27;
-    private static final int CRATER_RADIUS = 14;
-    private static final int GRADIENT_DELAY = 2;
+    private static final int CHARGE_RADIUS = 14;
+    private static final int CHARGE_START_AGE = 6;
+    private static final int CHARGE_RING_COUNT = 3;
+    private static final double CHARGE_RING_GAP = 4.5;
     private static final int SECONDARY_EXPLOSION_TICK = 24;
     private static final double CORE_SCALE = 2.1;
     private static final double SHELL_SCALE = 0.78;
@@ -35,23 +37,10 @@ public final class MeteorDirector {
     private static final double TARGET_DISTANCE = 14.0;
     private static final double PI = 3.141592653589793;
     private static final double DEG_TO_RAD = 0.017453292519943295;
-    private static final String[] PALETTE = {
-            "minecraft:magma_block",
-            "minecraft:netherrack",
-            "minecraft:red_terracotta",
-            "minecraft:orange_terracotta",
-            "minecraft:yellow_terracotta",
-            "minecraft:brown_terracotta",
-            "minecraft:blackstone",
-            "minecraft:basalt",
-            "minecraft:obsidian",
-            "minecraft:crying_obsidian"
-    };
 
     private final MeteorSmashPlugin plugin;
     private final List<Display.BlockDisplayEntity> blockDisplays = new ArrayList<>();
     private final List<World.Entity> displayEntities = new ArrayList<>();
-    private final int[] surfaceHeights = new int[(CRATER_RADIUS * 2 + 1) * (CRATER_RADIUS * 2 + 1)];
 
     private ScheduledTask task = null;
     private World world;
@@ -60,8 +49,6 @@ public final class MeteorDirector {
     private int generation;
     private int age;
     private int afterImpact;
-    private int gradientRadius;
-    private int nextPulseTick;
     private boolean impacted;
     private boolean secondaryExplosion;
 
@@ -86,8 +73,6 @@ public final class MeteorDirector {
         impact = new Position(targetX + 0.5, ground + 1.0, targetZ + 0.5);
         age = 0;
         afterImpact = 0;
-        gradientRadius = 0;
-        nextPulseTick = GRADIENT_DELAY;
         impacted = false;
         secondaryExplosion = false;
 
@@ -132,6 +117,7 @@ public final class MeteorDirector {
 
         if (!impacted) {
             updateFallingMeteor();
+            updateChargeEffect();
             age++;
             if (age >= FALL_TICKS) {
                 impact();
@@ -283,26 +269,9 @@ public final class MeteorDirector {
         world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, impact, new Position(4.0, 3.0, 4.0), 35, 0.08);
         world.spawnParticle(Particles.Particle.ELECTRIC_SPARK, impact, new Position(4.0, 3.0, 4.0), 30, 0.06);
         world.spawnParticle(Particles.Particle.END_ROD, impact, new Position(4.0, 4.0, 4.0), 26, 0.08);
-        initSurfaceCache();
     }
 
     private void updateImpactResidue() {
-        // Start with a readable inner ring, then accelerate from one ring every
-        // two ticks to one ring per tick as the pulse approaches the outer edge.
-        if (gradientRadius <= CRATER_RADIUS && afterImpact >= nextPulseTick) {
-            paintSurfaceWave(gradientRadius);
-            gradientRadius++;
-            int interval;
-            if (gradientRadius <= 1) {
-                interval = 3;
-            } else if (gradientRadius < 5) {
-                interval = 2;
-            } else {
-                interval = 1;
-            }
-            nextPulseTick = afterImpact + interval;
-        }
-
         Position ember = new Position(impact.x(), impact.y() + 0.8, impact.z());
         world.spawnParticle(Particles.Particle.FLAME, ember, new Position(3.4, 0.8, 3.4), 8, 0.02);
         world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, ember, new Position(2.8, 0.8, 2.8), 4, 0.015);
@@ -317,101 +286,128 @@ public final class MeteorDirector {
         }
     }
 
-    private void paintSurfaceWave(int radius) {
-        int centerX = (int) Math.floor(impact.x());
-        int centerY = (int) Math.floor(impact.y());
-        int centerZ = (int) Math.floor(impact.z());
-        int bedrockState = stateId("minecraft:bedrock");
-        int fireState = stateId("minecraft:fire");
+    /**
+     * Draws the orbital-charge style ground field while the meteor is falling.
+     * The wave is purely visual: it never changes terrain blocks. Rings are
+     * anchored to the impact ground plane and expand with an accelerating
+     * radius so the build-up reaches the target exactly when the meteor lands.
+     */
+    private void updateChargeEffect() {
+        if (age < CHARGE_START_AGE) {
+            return;
+        }
+        double raw = (age - CHARGE_START_AGE + 1.0) / (FALL_TICKS - CHARGE_START_AGE);
+        double progress = Math.pow(Math.min(1.0, raw), 1.45);
+        double outerRadius = CHARGE_RADIUS * progress;
 
-        for (int x = -CRATER_RADIUS; x <= CRATER_RADIUS; x++) {
-            for (int z = -CRATER_RADIUS; z <= CRATER_RADIUS; z++) {
-                double distance = Math.sqrt((double) (x * x + z * z));
-                if (distance > radius || (radius > 0 && distance <= radius - 1.0)) {
-                    continue;
-                }
+        if (outerRadius < 0.8) {
+            drawChargeCenter();
+            return;
+        }
 
-                int surface = surfaceHeights[(x + CRATER_RADIUS) * (CRATER_RADIUS * 2 + 1) + (z + CRATER_RADIUS)];
-                if (surface < -64) {
-                    continue;
-                }
-
-                int blockX = centerX + x;
-                int blockZ = centerZ + z;
-                BlockPos support = new BlockPos(blockX, surface, blockZ);
-                BlockPos above = new BlockPos(blockX, surface + 1, blockZ);
-                if (bedrockState != 0 && world.getBlockStateId(support) == bedrockState) {
-                    continue;
-                }
-
-                int colorIndex = (radius + 1) % PALETTE.length;
-                world.setBlockByName(support, PALETTE[colorIndex]);
-                world.setBlockByName(above, "minecraft:air");
-
-                if ((x & 1) == 0 && (z & 1) == 0) {
-                    Position top = new Position(blockX + 0.5, surface + 1.2, blockZ + 0.5);
-                    world.spawnParticle(Particles.Particle.FLAME, top, new Position(0.25, 0.3, 0.25), 2, 0.02);
-                    world.spawnParticle(Particles.Particle.LAVA, top, new Position(0.2, 0.25, 0.2), 1, 0.02);
-                    world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, top, new Position(0.2, 0.2, 0.2), 1, 0.01);
-                    if (distance >= 3.0) {
-                        world.spawnParticle(Particles.Particle.EXPLOSION, top, new Position(0.4, 0.4, 0.4), 1, 0.02);
-                    }
-                }
+        for (int ring = 0; ring < CHARGE_RING_COUNT; ring++) {
+            double radius = outerRadius - ring * CHARGE_RING_GAP;
+            if (radius >= 0.8) {
+                drawChargeRing(radius, ring);
             }
         }
+        drawChargeSpokes(outerRadius);
+        drawChargeCenter();
     }
 
-    private void triggerSecondaryExplosion() {
-        world.playCustomSound(
-                "minecraft:entity.generic.explode",
-                Sounds.SoundCategory.BLOCKS,
-                impact,
-                2.5f,
-                0.7f);
-        world.createExplosion(impact, 3.0f, false);
-        world.spawnParticle(Particles.Particle.EXPLOSION_EMITTER, impact, new Position(3.0, 2.0, 3.0), 8, 0.04);
-        world.spawnParticle(Particles.Particle.EXPLOSION, impact, new Position(5.0, 3.0, 5.0), 40, 0.12);
-        world.spawnParticle(Particles.Particle.FIREWORK, impact, new Position(5.0, 4.0, 5.0), 50, 0.12);
-        initSurfaceCache();
+    private void drawChargeRing(double radius, int ringIndex) {
+        int samples = Math.max(20, Math.min(72, (int) (radius * 6.0)));
+        double rotation = age * 0.16 + ringIndex * 0.8;
 
-        int centerX = (int) Math.floor(impact.x());
-        int centerY = (int) Math.floor(impact.y());
-        int centerZ = (int) Math.floor(impact.z());
-        int samples = 36;
         for (int i = 0; i < samples; i++) {
-            double angle = i * (2.0 * PI / samples);
-            Position point = new Position(
-                    centerX + 0.5 + Math.cos(angle) * 6.0,
-                    centerY + 1.0,
-                    centerZ + 0.5 + Math.sin(angle) * 6.0);
-            world.spawnParticle(Particles.Particle.FLAME, point, new Position(0.4, 0.5, 0.4), 3, 0.03);
-            world.spawnParticle(Particles.Particle.LAVA, point, new Position(0.3, 0.4, 0.3), 2, 0.02);
-            world.spawnParticle(Particles.Particle.END_ROD, point, new Position(0.3, 0.3, 0.3), 1, 0.01);
+            double angle = rotation + i * (2.0 * PI / samples);
+            if (Math.sin(angle * 3.0 - age * 0.28) < -0.55) {
+                continue;
+            }
+
+            int dx = (int) Math.round(Math.cos(angle) * radius);
+            int dz = (int) Math.round(Math.sin(angle) * radius);
+            Position point = chargePoint(dx, dz, 1.25);
+            if (point == null) {
+                continue;
+            }
+
+            world.spawnParticle(
+                    chargeParticle(ringIndex, false),
+                    point,
+                    new Position(0.06, 0.12, 0.06),
+                    1,
+                    0.01);
+            if ((i + ringIndex) % 3 == 0) {
+                world.spawnParticle(
+                        chargeParticle(ringIndex, true),
+                        point,
+                        new Position(0.05, 0.10, 0.05),
+                        1,
+                        0.005);
+            }
         }
     }
 
-    private void initSurfaceCache() {
+    private void drawChargeSpokes(double outerRadius) {
+        int spokes = 6;
+        int steps = Math.max(2, (int) Math.ceil(outerRadius));
+        double baseAngle = age * 0.12;
+
+        for (int spoke = 0; spoke < spokes; spoke++) {
+            double angle = baseAngle + spoke * (2.0 * PI / spokes);
+            for (int step = 1; step <= steps; step++) {
+                double radius = outerRadius * step / steps;
+                int dx = (int) Math.round(Math.cos(angle) * radius);
+                int dz = (int) Math.round(Math.sin(angle) * radius);
+                Position point = chargePoint(dx, dz, 1.10);
+                if (point == null) {
+                    continue;
+                }
+
+                world.spawnParticle(
+                        Particles.Particle.ELECTRIC_SPARK,
+                        point,
+                        new Position(0.05, 0.10, 0.05),
+                        1,
+                        0.005);
+                if (step % 3 == 0) {
+                    world.spawnParticle(
+                            Particles.Particle.END_ROD,
+                            point,
+                            new Position(0.04, 0.08, 0.04),
+                            1,
+                            0.004);
+                }
+            }
+        }
+    }
+
+    private void drawChargeCenter() {
+        Position center = chargePoint(0, 0, 1.5);
+        if (center == null) {
+            return;
+        }
+        world.spawnParticle(Particles.Particle.END_ROD, center, new Position(0.25, 0.18, 0.25), 2, 0.01);
+        world.spawnParticle(Particles.Particle.ELECTRIC_SPARK, center, new Position(0.35, 0.22, 0.35), 2, 0.01);
+        world.spawnParticle(Particles.Particle.SOUL_FIRE_FLAME, center, new Position(0.25, 0.16, 0.25), 1, 0.01);
+    }
+
+    private Particles.Particle chargeParticle(int ringIndex, boolean secondary) {
+        if (ringIndex == 0) {
+            return secondary ? Particles.Particle.ELECTRIC_SPARK : Particles.Particle.END_ROD;
+        }
+        if (ringIndex == 1) {
+            return secondary ? Particles.Particle.SOUL_FIRE_FLAME : Particles.Particle.ELECTRIC_SPARK;
+        }
+        return secondary ? Particles.Particle.LAVA : Particles.Particle.FLAME;
+    }
+
+    private Position chargePoint(int dx, int dz, double lift) {
         int centerX = (int) Math.floor(impact.x());
-        int centerY = (int) Math.floor(impact.y());
         int centerZ = (int) Math.floor(impact.z());
-        int fireState = stateId("minecraft:fire");
-        for (int x = -CRATER_RADIUS; x <= CRATER_RADIUS; x++) {
-            for (int z = -CRATER_RADIUS; z <= CRATER_RADIUS; z++) {
-                int index = (x + CRATER_RADIUS) * (CRATER_RADIUS * 2 + 1) + (z + CRATER_RADIUS);
-                surfaceHeights[index] = findSurface(centerX + x, centerZ + z, centerY, fireState);
-            }
-        }
-    }
-
-    private int findSurface(int x, int z, int centerY, int fireState) {
-        for (int y = centerY + 10; y >= -64; y--) {
-            int state = world.getBlockStateId(new BlockPos(x, y, z));
-            int above = world.getBlockStateId(new BlockPos(x, y + 1, z));
-            if (state != 0 && (above == 0 || above == fireState)) {
-                return y;
-            }
-        }
-        return -9999;
+        int groundY = (int) Math.floor(impact.y()) - 1;
+        return new Position(centerX + dx + 0.5, groundY + lift, centerZ + dz + 0.5);
     }
 
     private void spawnCore() {
@@ -488,6 +484,34 @@ public final class MeteorDirector {
         displayEntities.clear();
         blockDisplays.clear();
         label = null;
+    }
+
+    private void triggerSecondaryExplosion() {
+        world.playCustomSound(
+                "minecraft:entity.generic.explode",
+                Sounds.SoundCategory.BLOCKS,
+                impact,
+                2.5f,
+                0.7f);
+        world.createExplosion(impact, 3.0f, false);
+        world.spawnParticle(Particles.Particle.EXPLOSION_EMITTER, impact, new Position(3.0, 2.0, 3.0), 8, 0.04);
+        world.spawnParticle(Particles.Particle.EXPLOSION, impact, new Position(5.0, 3.0, 5.0), 40, 0.12);
+        world.spawnParticle(Particles.Particle.FIREWORK, impact, new Position(5.0, 4.0, 5.0), 50, 0.12);
+
+        int centerX = (int) Math.floor(impact.x());
+        int centerY = (int) Math.floor(impact.y());
+        int centerZ = (int) Math.floor(impact.z());
+        int samples = 36;
+        for (int i = 0; i < samples; i++) {
+            double angle = i * (2.0 * PI / samples);
+            Position point = new Position(
+                    centerX + 0.5 + Math.cos(angle) * 6.0,
+                    centerY + 1.0,
+                    centerZ + 0.5 + Math.sin(angle) * 6.0);
+            world.spawnParticle(Particles.Particle.FLAME, point, new Position(0.4, 0.5, 0.4), 3, 0.03);
+            world.spawnParticle(Particles.Particle.LAVA, point, new Position(0.3, 0.4, 0.3), 2, 0.02);
+            world.spawnParticle(Particles.Particle.END_ROD, point, new Position(0.3, 0.3, 0.3), 1, 0.01);
+        }
     }
 
     private int findGround(int x, int z, int startY) {

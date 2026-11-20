@@ -1,6 +1,6 @@
 # MeteorSmash
 
-A cinematic Pumpkin plugin that summons a falling meteor made from block-display entities, particle trails, custom sounds, and a layered burning impact crater.
+A cinematic Pumpkin plugin that summons a falling meteor with block-display geometry, a pre-impact orbital-style ground charge, particle trails, custom sounds, and a burning impact crater.
 
 ## Command
 
@@ -24,12 +24,13 @@ The meteor uses a mixed approach:
 
 - block-display entities for the falling core and rotating shell;
 - display transformations for motion and rotation;
-- real Pumpkin particles for flame, lava, smoke, explosion and firework trails;
+- a pre-impact surface charge made from rotating particle rings and radial spokes;
+- real Pumpkin particles for flame, lava, explosion and firework trails;
 - custom sound identifiers for the dragon growl, blaze shots, explosion, thunder and fire ambience;
-- real block mutations for the crater, magma core, blackstone rim and fire ring;
+- a real explosion for the crater and impact damage;
 - a text display for the meteor label.
 
-The animation is driven by one `everyTicks` task. There are no gameplay threads or blocking calls.
+The animation is driven by one `everyTicks` task. The charge field is particle-only and does not scan or mutate terrain blocks.
 
 ## Compatibility
 
@@ -80,11 +81,11 @@ cp target/wasm/meteorsmash.wasm <server>/plugins/meteorsmash.wasm
 
 Validated against Pumpkin nightly `0.2.2+26.3-26.63`:
 
-- plugin loads as `meteorsmash (0.1.0)`;
+- plugin loads as `meteorsmash (0.1.7)`;
 - OP player can execute `/meteor`;
 - command returns the inbound message;
 - animation and impact execute without a Wasm trap;
-- custom sound calls, particle calls, block writes and display creation return normally.
+- custom sound calls, particle calls and display creation return normally.
 
 ## Visual design
 
@@ -102,7 +103,7 @@ See [VISUAL.md](VISUAL.md) for the composition, public particle/sound identifier
 Published at:
 
 ```text
-https://github.com/AndresqDev/MeteorSmash/releases/tag/v0.1.6
+https://github.com/AndresqDev/MeteorSmash/releases/tag/v0.1.7
 ```
 
 ## License

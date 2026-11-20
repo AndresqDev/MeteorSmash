@@ -10,9 +10,11 @@ The effect uses the visual primitives available in the Pumpkin 0.1.2 WIT API.
 | Rotating shell | six `BLOCK_DISPLAY` entities using obsidian, netherrack, blackstone, crying obsidian and magma |
 | Motion | center-based `DisplayTransformation` orbit and rotation updated once per tick |
 | Trail | `FLAME`, `LAVA`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` particles |
+| Pre-impact charge | three rotating particle rings and six radial spokes expanding across the target ground plane |
+| Charge palette | outer `END_ROD`/`ELECTRIC_SPARK`, middle `SOUL_FIRE_FLAME`/`ELECTRIC_SPARK`, inner `FLAME`/`LAVA` |
 | Impact | expanding particle shockwave with `EXPLOSION_EMITTER`, `EXPLOSION`, `FLAME`, `LAVA`, `FIREWORK`, `END_ROD`, `SOUL_FIRE_FLAME`, and `ELECTRIC_SPARK` |
-| Crater | post-explosion surface scan and accelerating palette pulse across the nearest air-exposed block in each column |
-| Fire | only the initial explosion can ignite supported surface blocks; the color pulse clears fire above each surface it reaches |
+| Crater | real explosion only; the charge field never edits terrain |
+| Fire | the initial explosion can ignite supported surface blocks; no fire is added by the charge field |
 | Label | `TEXT_DISPLAY` with a centered gold `METEOR` billboard |
 | Audio | custom Minecraft resource identifiers for dragon, blaze, explosion, thunder and fire sounds |
 
@@ -42,10 +44,12 @@ The impact uses actual world block changes rather than only display entities, so
 ## Timing
 
 - fall: 44 ticks;
+- charge start: fall tick 6;
+- charge radius: 14 blocks, accelerating with `progress^1.45`;
+- charge completion: fall tick 43, one tick before impact;
+- charge fire: none; the field is particle-only;
 - impact particles: immediate burst;
-- surface gradient: 2-tick hold, then a 3/2/1-tick ring cadence out to radius 14;
-- gradient fire: none; surface fire is cleared while the color pulse passes;
-- secondary explosion: triggered 24 ticks after impact, three ticks after the outer ring;
+- secondary explosion: triggered 24 ticks after impact;
 - residue: 70 ticks after impact before the task is cancelled;
 - display interpolation: disabled; transforms are recomputed once per tick.
 
